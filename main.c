@@ -7,12 +7,12 @@
 static struct option longopts[] = {
 	{"help", no_argument, 0, 'h'},
 	{"verbose", no_argument, 0, 'v'},
-	{"create", required_argument, 0, 'c'},
+	{"create", no_argument, 0, 'c'},
 	{"compress", no_argument, 0, 'z'},
-	{"list", required_argument, 0, 'l'},
-	{"extract", required_argument, 0, 'x'},
-	{"delete", required_argument, 0, 'd'},
-	{"rename", required_argument, 0, 'r'},
+	{"list", no_argument, 0, 'l'},
+	{"extract", no_argument, 0, 'x'},
+	{"delete", no_argument, 0, 'd'},
+	{"rename", no_argument, 0, 'r'},
 	{0, 0, 0, 0}
 };
 
@@ -21,15 +21,20 @@ static struct option longopts[] = {
 // main function.
 void helpMsg();
 
+// Defined in 'write.c'
+// Writes data to a new or existing archive. Does not handle the
+// delete and rename types.
+int write(char *archive, int index, char *files[], int compress, int verbose);
+
 int main(int argc, const char *argv[]) {
 
 	// Start the process by getting all the options entered. Using
 	// getopt_long for this.
-	unsigned short verbose = 0, compress = 0;
+	int verbose = 0, compress = 0;
 	int index;
-	char c = getopt_long(argc, argv, "hvzc:l:x:d:r:", longopts, &index);
+	char c = getopt_long(argc, argv, ":hvzclxdr", longopts, &index);
 	char command = '\0';
-	char *archive;
+	char *archive = NULL;
 
 	while (c != -1) {
 
@@ -56,9 +61,8 @@ int main(int argc, const char *argv[]) {
 				// action. We'll call the appropriate function later.
 				if (command != '\0') break;
 				command = c;
-				archive = malloc(sizeof(char) * strlen(optarg) );
-				strcpy(archive, optarg);
 				break;
+			case '?':
 			default:
 				// Invalid command.
 				printf ("This is not a valid option. Use the --help ");
@@ -68,19 +72,63 @@ int main(int argc, const char *argv[]) {
 
 		}
 
-		c = getopt_long(argc, argv, "ht:", longopts, &index);
+		// Get the next option, and loop back.
+		c = getopt_long(argc, argv, ":hvzclxdr", longopts, &index);
 
 	}
 
+	// If there was no primary option provided, error out.
 	if (command == '\0') {
 
 		printf ("No option was provided. Use the --help ");
-		printf ("options for usage information.\n");
+		printf ("option for usage information.\n");
 		return -1;
 
 	}
 
-	printf("Command %c with file %s\n", command, archive);
+	// An option was provided but no argument was provided for the file. Error out.
+	if (optind == argc) {
+
+		printf ("No file was specified. Use the --help ");
+		printf ("option for usage information.\n");
+		return -1;
+
+	} else {
+
+		// The first argument is going to be the archive file.
+		// Save the file name for later.
+		archive = malloc(sizeof(char) * strlen(argv[optind]));
+		strcpy(archive, argv[optind]);
+		optind++;
+
+	}
+
+	if (verbose) printf ("./dar running in verbose mode.\n");
+
+	// Set up variables to pass them into other functions.
+	index = argc - optind;
+	char *files[index];
+
+	if (verbose) printf ("Command %c with archive file %s.\n", command, archive);
+	
+	for (int i = 0; i < index; i++) {
+
+		files[i] = argv[i + optind];
+		if (verbose) printf("File %i: %s\n", i + 1, files[i]);
+
+	}
+
+	//
+	switch (command) {
+
+		case 'c':
+			return write(archive, index, files, compress, verbose);
+		case 'l':
+		case 'x':
+		case 'd':
+		case 'r':
+
+	}
 
 }
 
