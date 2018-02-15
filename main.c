@@ -24,7 +24,7 @@ void helpMsg();
 // Defined in 'write.c'
 // Writes data to a new or existing archive. Does not handle the
 // delete and rename types.
-int write(char *archive, int index, char *files[], int compress, int verbose);
+int writeArch(char *archive, int index, char *files[], int compress, int verbose);
 
 int main(int argc, const char *argv[]) {
 
@@ -122,11 +122,12 @@ int main(int argc, const char *argv[]) {
 	switch (command) {
 
 		case 'c':
-			return write(archive, index, files, compress, verbose);
+			return writeArch(archive, index, files, compress, verbose);
 		case 'l':
 		case 'x':
 		case 'd':
 		case 'r':
+			break;
 
 	}
 
