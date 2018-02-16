@@ -110,15 +110,9 @@ int main(int argc, const char *argv[]) {
 	char **files = malloc(sizeof(char *) * index);
 
 	if (verbose) printf ("Command %c with archive file %s.\n", command, archive);
-	
-	for (int i = 0; i < index; i++) {
 
-		files[i] = argv[i + optind];
-		if (verbose) printf("File %i: %s\n", i + 1, files[i]);
+	for (int i = 0; i < index; i++) files[i] = argv[i + optind];
 
-	}
-
-	//
 	switch (command) {
 
 		case 'c':

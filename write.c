@@ -39,7 +39,7 @@ void convert(int input, char *octal, int size);
 int writeArch (char *archive, int index, char **files, int compress, int verbose) {
 
 	// Open or create the archive. Quit if there's an error.
-	int fd = open(archive, O_RDWR, O_CREAT);
+	int fd = open(archive, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 	free(archive);
 
 	if (fd == -1) return -1;
@@ -47,30 +47,23 @@ int writeArch (char *archive, int index, char **files, int compress, int verbose
 	struct stat fileinfo;
 	fstat(fd, &fileinfo);
 
-	if (fileinfo.st_size <= TR_SIZE) {
+	int init = index;
+
+	if (fileinfo.st_size > TR_SIZE - 1) {
 
 		// Archive is newly created. Set the offset to the beginning.
-		lseek(fd, SEEK_SET, 0);
-
-		// Write the end of the file.
-		write(fd, TRAILER, TR_SIZE);
-
-		fileinfo.st_size += TR_SIZE;
+		lseek(fd, SEEK_SET, fileinfo.st_size - TR_SIZE + 1);
 
 	}
-	
-	// The archive is now guaranteed to have an end. Start writing to just before it.
-	// THIS IS OVERWRITTEN BY EVERYTHING ELSE. We'll re-write the ending later.
-	int t = lseek(fd, SEEK_SET, fileinfo.st_size - TR_SIZE);
 
 	for (int i = 0; i < index; i++) {
 
 		fstatat(AT_FDCWD, files[i], &fileinfo, 0);
 
 		// Creating a string to hold the concatinated header.
-		char *header = malloc((76 + strlen(files[i])) * sizeof(char));
-		char conv1[6];
-		char conv2[11];
+		char *header = malloc((76 + strlen(files[i]) + 1) * sizeof(char));
+		char *conv1 = malloc(6 * sizeof(char));
+		char *conv2 = malloc(11 * sizeof(char));
 		int isDir = 0;
 		strcpy(header, "070707");
 
@@ -123,12 +116,12 @@ int writeArch (char *archive, int index, char **files, int compress, int verbose
 					}
 
 					files[j + index] = malloc(sizeof(char) *
-					(strlen((*list[j]).d_name) + strlen(files[i] + 1)));
+					(strlen((*list[j]).d_name) + strlen(files[i]) + 1));
 
 					strcpy(files[j + index], files[i]);
 					strcat(files[j + index], "/");
 
-					strcat(files[j + index], (*(list[j])).d_name);
+					strcat(files[j + index], (*list[j]).d_name);
 
 				}
 
@@ -168,22 +161,27 @@ int writeArch (char *archive, int index, char **files, int compress, int verbose
 
 		// Write the header to the file
 		write(fd, header, 76 + strlen(files[i]) + 1);
+		free(conv1);
+		free(conv2);
 
 		if (isDir == 0) {
 			
 			if (verbose) printf ("Writing file %s.\n", files[i]);
 			// Copy the body into the file. No compression.
 			int toCopy = open(files[i], O_RDONLY);
-			char *innards = malloc((fileinfo.st_size + 2) * sizeof(char));
-			read(toCopy, innards, fileinfo.st_size + 1);
+			char *innards = malloc((fileinfo.st_size + 1) * sizeof(char));
+			read(toCopy, innards, fileinfo.st_size);
 			strcat(innards, "\0");
-			write(fd, innards, fileinfo.st_size);
+			write(fd, innards, fileinfo.st_size + 1);
 
 			// Clean up.
 			free(innards);
 			close(toCopy);
 
 		}
+
+		// Remove the allocated memory of recursively found files.
+		if (i >= init) free(files[i]);
 
 	}
 
