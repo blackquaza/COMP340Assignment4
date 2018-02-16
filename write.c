@@ -5,8 +5,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <dirent.h>
 
 #define _POSIX_C_SOURCE
+#define _GNU_SOURCE
 
 // Defining the trailer string and size of the archive.
 #define TRAILER "0707070000000000000000000000000000000000010000000000000000000001300000000000TRAILER!!!\0"
@@ -26,14 +28,19 @@
 // links, fifos, and specials are not needed to implement, I've taken the rdev field
 // and repurposed it to track compression, renames, and deletions.
 
-int writeArch (char *archive, int index, char *files[], int compress, int verbose) {
+// Everything in the odc header is in octals, so this function converts the decimals
+// provided by the kernel and converts them into the correct string.
+//
+// Referenced the following site for information:
+// http://man7.org/linux/man-pages/man7/inode.7.html
 
-	printf ("%s\n", archive);
+void convert(int input, char *octal, int size);
+
+int writeArch (char *archive, int index, char **files, int compress, int verbose) {
+
 	// Open or create the archive. Quit if there's an error.
 	int fd = open(archive, O_RDWR, O_CREAT);
 	free(archive);
-
-	printf ("%i\n", fd);
 
 	if (fd == -1) return -1;
 
@@ -56,78 +63,127 @@ int writeArch (char *archive, int index, char *files[], int compress, int verbos
 	// THIS IS OVERWRITTEN BY EVERYTHING ELSE. We'll re-write the ending later.
 	int t = lseek(fd, SEEK_SET, fileinfo.st_size - TR_SIZE);
 
-	printf ("lseek %i\n", fileinfo.st_size - TR_SIZE);
-
-	if (verbose) printf ("Archive file opened.\n");
-
 	for (int i = 0; i < index; i++) {
 
 		fstatat(AT_FDCWD, files[i], &fileinfo, 0);
 
-		if (verbose) printf ("Writing: %s", files[i]);
-
 		// Creating a string to hold the concatinated header.
 		char *header = malloc((76 + strlen(files[i])) * sizeof(char));
-		char conv[11];
+		char conv1[6];
+		char conv2[11];
+		int isDir = 0;
 		strcpy(header, "070707");
 
-		sprintf(conv, "%06i", fileinfo.st_dev);
-		strcat(header, conv);
-		sprintf(conv, "%06i", fileinfo.st_ino);
-		strcat(header, conv);
+		convert(fileinfo.st_dev, conv1, 6);
+		strcat(header, conv1);
+		convert(fileinfo.st_ino, conv1, 6);
+		strcat(header, conv1);
 
-		// st_mode provides a decimal version, but odc wants the octal
-		// version. Convert the decimal to octal before adding it.
-		//
-		// Refered to the following webpage for conversion information:
-		// http://man7.org/linux/man-pages/man7/inode.7.html
-		// 
 		// Output: First three numbers are the file type. 100 for normal and
 		// 040 for directories. Last three numbers are permissions.
-		int temp = fileinfo.st_mode;
-		char octal[6];
+		
+		convert(fileinfo.st_mode, conv1, 6);
+		strcat(header, conv1);
 
-		for (int j = 0; j < 6; j++) {
+		// Now that the octal is showing the correct format, we'll check it
+		// to see if it's a directory.
 
-			octal[5-j] = (temp % 8) + 48;
-			temp /= 8;
+		if (conv1[0] == '0' && conv1[1] == '4' && conv1[2] == '0') {
+
+			// It's a directory. Scan it and put all the files inside onto
+			// our list of stuff to archive.
+			//
+			// Referred to the following for scandirat() information:
+			// http://man7.com/linux/man-pages/man3/scandir.3.html
+			
+			isDir = 1;
+
+			// cpio doesn't write the current dir and parent dir links into
+			// the archive, so nethier shall we.
+			if (strcmp(files[i], ".") != 0 && strcmp(files[i], "..") != 0) {
+				
+				if (verbose) {printf ("Encountered directory %s. ", files[i]);
+					      printf ("Adding contents to list.\n");}
+				
+				//fileinfo.st_size = 0;
+				struct dirent **list;
+				int temp = scandirat(AT_FDCWD, files[i], &list, NULL, NULL);
+				files = realloc(files, sizeof(char *) * (index + temp));
+
+				for (int j = 0; j < temp; j++) {
+
+					if (strcmp((*list[j]).d_name, ".") == 0 || 
+					    strcmp((*list[j]).d_name, "..") == 0) {
+
+						// More current / parent links. Skip.
+
+						index--;
+						continue;
+
+					}
+
+					files[j + index] = malloc(sizeof(char) *
+					(strlen((*list[j]).d_name) + strlen(files[i] + 1)));
+
+					strcpy(files[j + index], files[i]);
+					strcat(files[j + index], "/");
+
+					strcat(files[j + index], (*(list[j])).d_name);
+
+				}
+
+				index += temp;
+
+			} else {
+				
+				// Encountered a current or parent link. Skip.
+				continue;
+
+			}
+
+		} else if (!(conv1[0] == '1' && conv1[1] == '0' && conv1[2] == '0')) {
+
+			// Not a regular file or a directory. Skip it.
+			continue;
 
 		}
 
-		//sprintf(conv, "%06i", fileinfo.st_mode);
-		strcat(header, octal);
-		printf ("raw %i conv %s\n", fileinfo.st_mode, octal);
-		sprintf(conv, "%06i", fileinfo.st_uid);
-		strcat(header, conv);
-		sprintf(conv, "%06i", fileinfo.st_gid);
-		strcat(header, conv);
-		sprintf(conv, "%06i", fileinfo.st_nlink);
-		strcat(header, conv);
-		sprintf(conv, "%06i", fileinfo.st_rdev);
-		strcat(header, conv);
-		sprintf(conv, "%011i", fileinfo.st_mtime);
-		strcat(header, conv);
-		sprintf(conv, "%06i", strlen(files[i]) + 1);
-		strcat(header, conv);
-		sprintf(conv, "%011i", fileinfo.st_size + strlen(files[i]) + 3);
-		strcat(header, conv);
+		convert(fileinfo.st_uid, conv1, 6);
+		strcat(header, conv1);
+		convert(fileinfo.st_gid, conv1, 6);
+		strcat(header, conv1);
+		convert(fileinfo.st_nlink, conv1, 6);
+		strcat(header, conv1);
+		convert(fileinfo.st_rdev, conv1, 6);
+		strcat(header, conv1);
+		convert(fileinfo.st_mtime, conv2, 11);
+		strcat(header, conv2);
+		convert(strlen(files[i]) + 1, conv1, 6);
+		strcat(header, conv1);
+		convert(fileinfo.st_size, conv2, 11);
+		strcat(header, conv2);
+
 		strcat(header, files[i]);
 		strcat(header, "\0");
 
 		// Write the header to the file
 		write(fd, header, 76 + strlen(files[i]) + 1);
 
-		// Copy the body into the file. No compression.
-		int toCopy = open(files[i], O_RDONLY);
-		char *innards = malloc((fileinfo.st_size + 2) * sizeof(char));
-		read(toCopy, innards, fileinfo.st_size + 1);
-		strcat(innards, "\0");
-		write(fd, innards, fileinfo.st_size);
+		if (isDir == 0) {
+			
+			if (verbose) printf ("Writing file %s.\n", files[i]);
+			// Copy the body into the file. No compression.
+			int toCopy = open(files[i], O_RDONLY);
+			char *innards = malloc((fileinfo.st_size + 2) * sizeof(char));
+			read(toCopy, innards, fileinfo.st_size + 1);
+			strcat(innards, "\0");
+			write(fd, innards, fileinfo.st_size);
 
-		// Clean up.
-		free(innards);
-		close(toCopy);
+			// Clean up.
+			free(innards);
+			close(toCopy);
 
+		}
 
 	}
 
@@ -150,5 +206,16 @@ int writeArch (char *archive, int index, char *files[], int compress, int verbos
 	close(fd);
 
 	return 0;
+
+}
+
+void convert(int input, char *octal, int size) {
+
+	for (int j = 0; j < size; j++) {
+
+		octal[size - j - 1] = (input % 8) + 48;
+		input /= 8;
+
+	}
 
 }

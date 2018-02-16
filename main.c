@@ -24,7 +24,7 @@ void helpMsg();
 // Defined in 'write.c'
 // Writes data to a new or existing archive. Does not handle the
 // delete and rename types.
-int writeArch(char *archive, int index, char *files[], int compress, int verbose);
+int writeArch(char *archive, int index, char **files, int compress, int verbose);
 
 int main(int argc, const char *argv[]) {
 
@@ -107,7 +107,7 @@ int main(int argc, const char *argv[]) {
 
 	// Set up variables to pass them into other functions.
 	index = argc - optind;
-	char *files[index];
+	char **files = malloc(sizeof(char *) * index);
 
 	if (verbose) printf ("Command %c with archive file %s.\n", command, archive);
 	
