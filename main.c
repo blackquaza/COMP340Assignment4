@@ -26,6 +26,10 @@ void helpMsg();
 // delete and rename types.
 int writeArch(char *archive, int index, char **files, int compress, int verbose);
 
+// Defined in 'read.c'
+// Reads and potentially extracts the existing archive.
+int readArch(char *archive, int readonly, int verbose);
+
 int main(int argc, const char *argv[]) {
 
 	// Start the process by getting all the options entered. Using
@@ -118,7 +122,9 @@ int main(int argc, const char *argv[]) {
 		case 'c':
 			return writeArch(archive, index, files, compress, verbose);
 		case 'l':
+			return readArch(archive, 1, verbose);
 		case 'x':
+			return readArch(archive, 0, verbose);
 		case 'd':
 		case 'r':
 			break;

@@ -169,10 +169,10 @@ int writeArch (char *archive, int index, char **files, int compress, int verbose
 			if (verbose) printf ("Writing file %s.\n", files[i]);
 			// Copy the body into the file. No compression.
 			int toCopy = open(files[i], O_RDONLY);
-			char *innards = malloc((fileinfo.st_size + 1) * sizeof(char));
+			char *innards = malloc((fileinfo.st_size) * sizeof(char));
 			read(toCopy, innards, fileinfo.st_size);
-			strcat(innards, "\0");
-			write(fd, innards, fileinfo.st_size + 1);
+			//strcat(innards, "\0");
+			write(fd, innards, fileinfo.st_size);
 
 			// Clean up.
 			free(innards);

@@ -1,7 +1,4 @@
 CC = gcc
 
-dar: main.c write.c
-	$(CC) main.c write.c -o dar
-
-ignore: main.c write.c
-	$(CC) main.c write.c -w -o dar
+dar: main.c write.c read.c
+	$(CC) main.c write.c read.c -w -o dar -lm
