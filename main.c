@@ -26,6 +26,11 @@ void helpMsg();
 // delete and rename types.
 int writeArch(char *archive, int index, char **files, int compress, int verbose);
 
+// Defined in 'edit.c'
+// Adds the delete or rename pseudofiles to the archive, to be enacted
+// during extraction.
+int editArch(char *archive, int index, char **files, int rename, int verbose);
+
 // Defined in 'read.c'
 // Reads and potentially extracts the existing archive.
 int readArch(char *archive, int readonly, int verbose);
@@ -126,8 +131,11 @@ int main(int argc, const char *argv[]) {
 		case 'x':
 			return readArch(archive, 0, verbose);
 		case 'd':
+			return editArch(archive, index, files, 0, verbose);
 		case 'r':
-			break;
+			return editArch(archive, index, files, 1, verbose);
+		default:
+			return -1;
 
 	}
 
