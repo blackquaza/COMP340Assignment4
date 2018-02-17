@@ -35,6 +35,7 @@
 // http://man7.org/linux/man-pages/man7/inode.7.html
 
 void convert(int input, char *octal, int size);
+int convert2(char *input, int size); // Defined in 'read.c'
 
 int writeArch (char *archive, int index, char **files, int compress, int verbose) {
 
@@ -51,37 +52,78 @@ int writeArch (char *archive, int index, char **files, int compress, int verbose
 
 	if (fileinfo.st_size > TR_SIZE - 1) {
 
-		// Archive is newly created. Set the offset to the beginning.
-		lseek(fd, SEEK_SET, fileinfo.st_size - TR_SIZE + 1);
+		// Archive already exists. Set the archive to the end. Because the archive is
+		// filled with NULL characters, we instead have to loop through the items in
+		// the archive to get the end.
+
+		char *buf = NULL;
+		int i = 0;
+		while (1) {
+
+			int j = 0;
+			lseek(fd, i + 59, SEEK_SET);
+			buf = malloc(6 * sizeof(char));
+			read(fd, buf, 6);
+			j = convert2(buf, 6);
+			free(buf);
+			lseek(fd, i + 76, SEEK_SET);
+			buf = malloc(j * sizeof(char));
+			read(fd, buf, j);
+
+			if (strcmp(buf, "TRAILER!!!\0") == 0) {
+				
+				// Found the end. Set the writing point to be just
+				// before the trailer. It'll be overwritten, but
+				// we'll rewrite it later.
+				j = lseek(fd, i, SEEK_SET);
+				free(buf);
+				break;
+
+			}
+
+			free(buf);
+			lseek(fd, i + 65, SEEK_SET);
+			buf = malloc(11 * sizeof(char));
+			read(fd, buf, 11);
+			j += convert2(buf, 11);
+			free(buf);
+			i += j + 76;
+
+		}
 
 	}
 
+	char *conv = NULL;
+
 	for (int i = 0; i < index; i++) {
 
-		fstatat(AT_FDCWD, files[i], &fileinfo, 0);
+		if (fstatat(AT_FDCWD, files[i], &fileinfo, 0) == -1) continue;
 
 		// Creating a string to hold the concatinated header.
 		char *header = malloc((76 + strlen(files[i]) + 1) * sizeof(char));
-		char *conv1 = malloc(6 * sizeof(char));
-		char *conv2 = malloc(11 * sizeof(char));
 		int isDir = 0;
 		strcpy(header, "070707");
 
-		convert(fileinfo.st_dev, conv1, 6);
-		strcat(header, conv1);
-		convert(fileinfo.st_ino, conv1, 6);
-		strcat(header, conv1);
+		conv = malloc(7 * sizeof(char));
+		convert(fileinfo.st_dev, conv, 6);
+		strcat(header, conv);
+		free(conv);
+
+		conv = malloc(7 * sizeof(char));
+		convert(fileinfo.st_ino, conv, 6);
+		strcat(header, conv);
+		free(conv);
 
 		// Output: First three numbers are the file type. 100 for normal and
 		// 040 for directories. Last three numbers are permissions.
-		
-		convert(fileinfo.st_mode, conv1, 6);
-		strcat(header, conv1);
+		conv = malloc(7 * sizeof(char));
+		convert(fileinfo.st_mode, conv, 6);
+		strcat(header, conv);
 
 		// Now that the octal is showing the correct format, we'll check it
 		// to see if it's a directory.
 
-		if (conv1[0] == '0' && conv1[1] == '4' && conv1[2] == '0') {
+		if (conv[0] == '0' && conv[1] == '4' && conv[2] == '0') {
 
 			// It's a directory. Scan it and put all the files inside onto
 			// our list of stuff to archive.
@@ -134,35 +176,56 @@ int writeArch (char *archive, int index, char **files, int compress, int verbose
 
 			}
 
-		} else if (!(conv1[0] == '1' && conv1[1] == '0' && conv1[2] == '0')) {
+		} else if (!(conv[0] == '1' && conv[1] == '0' && conv[2] == '0')) {
 
 			// Not a regular file or a directory. Skip it.
 			continue;
 
 		}
 
-		convert(fileinfo.st_uid, conv1, 6);
-		strcat(header, conv1);
-		convert(fileinfo.st_gid, conv1, 6);
-		strcat(header, conv1);
-		convert(fileinfo.st_nlink, conv1, 6);
-		strcat(header, conv1);
-		convert(fileinfo.st_rdev, conv1, 6);
-		strcat(header, conv1);
-		convert(fileinfo.st_mtime, conv2, 11);
-		strcat(header, conv2);
-		convert(strlen(files[i]) + 1, conv1, 6);
-		strcat(header, conv1);
-		convert(fileinfo.st_size, conv2, 11);
-		strcat(header, conv2);
+		free(conv);
+
+		conv = malloc(7 * sizeof(char));
+		convert(fileinfo.st_uid, conv, 6);
+		strcat(header, conv);
+		free(conv);
+
+		conv = malloc(7 * sizeof(char));
+		convert(fileinfo.st_gid, conv, 6);
+		strcat(header, conv);
+		free(conv);
+		
+		conv = malloc(7 * sizeof(char));
+		convert(fileinfo.st_nlink, conv, 6);
+		strcat(header, conv);
+		free(conv);
+
+		conv = malloc(7 * sizeof(char));
+		convert(fileinfo.st_rdev, conv, 6);
+		strcat(header, conv);
+		free(conv);
+		
+		conv = malloc(12 * sizeof(char));
+		convert(fileinfo.st_mtime, conv, 11);
+		strcat(header, conv);
+		free(conv);
+		
+		conv = malloc(7 * sizeof(char));
+		convert(strlen(files[i]) + 1, conv, 6);
+		strcat(header, conv);
+		free(conv);
+
+		conv = malloc(12 * sizeof(char));
+		convert(fileinfo.st_size, conv, 11);
+		strcat(header, conv);
+		free(conv);
 
 		strcat(header, files[i]);
 		strcat(header, "\0");
 
 		// Write the header to the file
 		write(fd, header, 76 + strlen(files[i]) + 1);
-		free(conv1);
-		free(conv2);
+		free(header);
 
 		if (isDir == 0) {
 			
@@ -171,7 +234,6 @@ int writeArch (char *archive, int index, char **files, int compress, int verbose
 			int toCopy = open(files[i], O_RDONLY);
 			char *innards = malloc((fileinfo.st_size) * sizeof(char));
 			read(toCopy, innards, fileinfo.st_size);
-			//strcat(innards, "\0");
 			write(fd, innards, fileinfo.st_size);
 
 			// Clean up.
@@ -185,19 +247,16 @@ int writeArch (char *archive, int index, char **files, int compress, int verbose
 
 	}
 
-	// Rewrite the ending, cause we deleted it. Trollolol.
+	// Write the ending.
 	write(fd, TRAILER, TR_SIZE);
 
 	// From the extremely help and extremely persistent errors provided by cpio
 	// (hehehehehe shoot me), I've found that cpio archives have a bunch of null
 	// characters at the end to size them to the nearest block. Do this now.
-	
-	fstat(fd, &fileinfo);
 
-	while (fileinfo.st_size % 512 != 0) {
+	while (lseek(fd, 0, SEEK_CUR) % 512 != 0) {
 
 		write(fd, "\0", 1);
-		fileinfo.st_size++;
 
 	}
 
@@ -215,5 +274,7 @@ void convert(int input, char *octal, int size) {
 		input /= 8;
 
 	}
+
+	octal[size] = '\0';
 
 }
