@@ -25,7 +25,8 @@ int editArch (char *archive, int index, char **files, int rename, int verbose) {
 
 	if (rename && index % 2 == 1) {
 
-		printf ("Incorrent number of arguments. Use --help for usage information.\n");
+		printf ("Incorrent number of arguments. Use the --help ");
+		printf ("option for usage information.\n");
 		return -1;
 
 	}

@@ -68,7 +68,11 @@ int main(int argc, const char *argv[]) {
 			case 'r':
 				// In all of the primary cases, just save the selected
 				// action. We'll call the appropriate function later.
-				if (command != '\0') break;
+				if (command != '\0') {
+					printf ("Only one primary option can be used. ");
+					printf ("Use the --help option for usage information.\n");
+					return -1;
+				}
 				command = c;
 				break;
 			case '?':
@@ -179,6 +183,7 @@ Primary options\n\
 \tSpecifies that certain files or directories are to be renamed\n\
 \twhen extracting the archive file. Like --delete, data is not\n\
 \tremoved from the archive file.\n\
+\tUsage: ./dar -r archive_file to_rename1 new_name1 ...\n\
 \n\
 Secondary options\n\
 \n\
