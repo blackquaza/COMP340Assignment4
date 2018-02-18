@@ -31,8 +31,8 @@ int readArch(char *archive, int readonly, int verbose) {
 
 	while (1) {
 
-		// Get the name length, which is characters 60 to 65 (6 total).
-		int test = lseek(fd, index + 59, SEEK_SET);
+		// Get the name length, which is characters 59 to 64 (6 total).
+		lseek(fd, index + 59, SEEK_SET);
 		input = malloc(6 * sizeof(char));
 		read(fd, input, 6);
 		int namelength = convert2(input, 6);
@@ -47,16 +47,89 @@ int readArch(char *archive, int readonly, int verbose) {
 		// of the archive. Break the loop.
 		if (strcmp(filename, "TRAILER!!!\0") == 0) break;
 
+		int flag = 0;
+
+		if (strcmp(filename, "RENAME!!!!\0") == 0) {
+		       
+			flag = 1;
+
+		} else if (strcmp(filename, "DELETE!!!!\0") == 0) {
+
+			flag = 2;
+
+		}
+
 		if (readonly) {
 
 			// This is the listing section. Fire off the name,
 			// move the index, and move on to the next one.
-			printf ("%s\n", filename);
+			if (!flag) {
+
+				printf ("%s\n", filename);
+
+			}
+
 			lseek(fd, index + 65, SEEK_SET);
 			input = malloc(11 * sizeof(char));
 			read(fd, input, 11);
 			int temp = convert2(input, 11);
 			index += 76 + namelength + temp;
+			free(input);
+			continue;
+
+		}
+
+		int filesize = 0;
+
+		// If its either rename or delete. The process is similar.
+		if (flag) {
+
+			lseek(fd, index + 65, SEEK_SET);
+			input = malloc(11 * sizeof(char));
+			read(fd, input, 11);
+			filesize = convert2(input, 11);
+			free(input);
+			lseek(fd, index + 76 + namelength, SEEK_SET);
+			char *file1 = malloc((filesize + 1) * sizeof(char));
+			char *file2 = NULL;
+			read(fd, file1, filesize);
+			strcat(file1, "\0");
+
+			if (flag == 1) {
+
+				int pos = 0;
+
+				while (file1[pos] != '>' || file1[pos+1] != '<') {
+
+					pos++;
+					if (pos == filesize - 1) return -1;
+
+				}
+
+				free(file1);
+				file1 = malloc((pos + 1) * sizeof(char));
+				lseek(fd, index + 76 + namelength, SEEK_SET);
+				read(fd, file1, pos);
+				strcat(file1, "\0");
+				lseek(fd, 2, SEEK_CUR);
+				file2 = malloc((filesize - pos - 1) * sizeof(char));
+				read(fd, file2, filesize - pos - 2);
+				strcat(file2, "\0");
+
+				if (verbose) printf ("Renaming %s to %s.\n", file1, file2);
+				rename(file1, file2);
+
+			} else {
+
+				if (verbose) printf ("Deleting %s.\n", file1);
+				remove(file1);
+
+			}
+
+			free(file1);
+			free(file2);
+			free(filename);
+			index += 76 + namelength + filesize;
 			continue;
 
 		}
@@ -72,7 +145,7 @@ int readArch(char *archive, int readonly, int verbose) {
 
 		// I don't care if this clobbers any existing files.
 		
-		int writing = 0, filesize = 0;
+		int writing = 0;
 
 		if (isDir == 1) {
 

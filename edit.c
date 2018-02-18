@@ -119,7 +119,7 @@ int editArch (char *archive, int index, char **files, int rename, int verbose) {
 		strcpy(data, files[i]);
 		
 		if (rename) {
-			strcat(data, "//");
+			strcat(data, "><");
 			strcat(data, files[++i]);
 		}
 
