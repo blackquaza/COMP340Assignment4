@@ -8,7 +8,6 @@ static struct option longopts[] = {
 	{"help", no_argument, 0, 'h'},
 	{"verbose", no_argument, 0, 'v'},
 	{"create", no_argument, 0, 'c'},
-	{"compress", no_argument, 0, 'z'},
 	{"list", no_argument, 0, 'l'},
 	{"extract", no_argument, 0, 'x'},
 	{"delete", no_argument, 0, 'd'},
@@ -41,7 +40,7 @@ int main(int argc, const char *argv[]) {
 	// getopt_long for this.
 	int verbose = 0, compress = 0;
 	int index;
-	char c = getopt_long(argc, argv, ":hvzclxdr", longopts, &index);
+	char c = getopt_long(argc, argv, ":hvzlxdr", longopts, &index);
 	char command = '\0';
 	char *archive = NULL;
 
@@ -61,7 +60,6 @@ int main(int argc, const char *argv[]) {
 			case 'z':
 				compress = 1;
 				break;
-			case 'c':
 			case 'l':
 			case 'x':
 			case 'd':
@@ -86,7 +84,7 @@ int main(int argc, const char *argv[]) {
 		}
 
 		// Get the next option, and loop back.
-		c = getopt_long(argc, argv, ":hvzclxdr", longopts, &index);
+		c = getopt_long(argc, argv, ":hvzlxdr", longopts, &index);
 
 	}
 
@@ -192,9 +190,6 @@ Secondary options\n\
 --verbose, -v\n\
 \tProvides details on what the archiver is doing. Only usable with one of\n\
 \tthe primary options.\n\
---compress, -z\n\
-\tCompressed files before adding them to an archive. Only usable when\n\
-\talso using the --create option.\n\
 ");
 
 }

@@ -43,6 +43,3 @@ Secondary options
 --verbose, -v
 	Provides details on what the archiver is doing. Only usable with one of
 	the primary options.
---compress, -z
-	Compressed files before adding them to an archive. Only usable when
-	also using the --create option.
